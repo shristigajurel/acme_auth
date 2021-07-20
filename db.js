@@ -4,6 +4,7 @@ const config = {
   logging: false,
 };
 const jwt = require("jsonwebtoken");
+const bcrypt = require('bcrypt');
 
 if (process.env.LOGGING) {
   delete config.logging;
@@ -43,23 +44,34 @@ User.byToken = async (token) => {
 User.authenticate = async ({ username, password }) => {
   const user = await User.findOne({
     where: {
-      username,
-      password,
+      username
     },
   });
   if (user) { // sign takes the data and secret, and returns a token
     // sign accepts data(payload), and a secret as arguments
     // the data in this case, if the user's id
     // process.env.JWT is our secret
+    const isThereAMatch = await bcrypt.compare(password, user.password);
+    if (isThereAMatch) {
     const token = await jwt.sign({userId: user.id}, process.env.JWT)
     // returning a token assigned to the user, info protection
     return token;
   }
-
+}
   const error = Error("bad credentials");
   error.status = 401;
   throw error;
 };
+
+// if the user changes the password then encrypt 
+// reassign the user. Password to the hashed password
+//re-assigning the user.password variable to a hashed version of what was inputted
+User.addHook('beforeCreate', async(user)=> {
+  if(user.changed('password')){
+    const userInputtedPassword = user.password
+    user.password = await bcrypt.hash(userInputtedPassword, 3);
+  }
+});
 
 const syncAndSeed = async () => {
   await conn.sync({ force: true });
@@ -85,4 +97,4 @@ module.exports = {
   models: {
     User,
   },
-};
+}
