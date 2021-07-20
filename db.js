@@ -4,7 +4,8 @@ const config = {
   logging: false,
 };
 const jwt = require("jsonwebtoken");
-const bcrypt = require('bcrypt');
+const bcrypt = require("bcrypt");
+const { HasMany, BelongsTo } = require("sequelize");
 
 if (process.env.LOGGING) {
   delete config.logging;
@@ -21,11 +22,12 @@ const User = conn.define("user", {
 
 // token we will send to the browser
 User.byToken = async (token) => {
-  try { // Verify function checks if the given token is valid - seeing if it matches the user's token
+  try {
+    // Verify function checks if the given token is valid - seeing if it matches the user's token
     const response = jwt.verify(token, process.env.JWT);
     // response = { userId: ... }
     const user = await User.findByPk(response.userId);
-    if(user){
+    if (user) {
       // if the tokens match, send back user info
       return user;
     }
@@ -44,31 +46,32 @@ User.byToken = async (token) => {
 User.authenticate = async ({ username, password }) => {
   const user = await User.findOne({
     where: {
-      username
+      username,
     },
   });
-  if (user) { // sign takes the data and secret, and returns a token
+  if (user) {
+    // sign takes the data and secret, and returns a token
     // sign accepts data(payload), and a secret as arguments
     // the data in this case, if the user's id
     // process.env.JWT is our secret
     const isThereAMatch = await bcrypt.compare(password, user.password);
     if (isThereAMatch) {
-    const token = await jwt.sign({userId: user.id}, process.env.JWT)
-    // returning a token assigned to the user, info protection
-    return token;
+      const token = await jwt.sign({ userId: user.id }, process.env.JWT);
+      // returning a token assigned to the user, info protection
+      return token;
+    }
   }
-}
   const error = Error("bad credentials");
   error.status = 401;
   throw error;
 };
 
-// if the user changes the password then encrypt 
+// if the user changes the password then encrypt
 // reassign the user. Password to the hashed password
 //re-assigning the user.password variable to a hashed version of what was inputted
-User.addHook('beforeCreate', async(user)=> {
-  if(user.changed('password')){
-    const userInputtedPassword = user.password
+User.addHook("beforeCreate", async (user) => {
+  if (user.changed("password")) {
+    const userInputtedPassword = user.password;
     user.password = await bcrypt.hash(userInputtedPassword, 3);
   }
 });
@@ -83,6 +86,24 @@ const syncAndSeed = async () => {
   const [lucy, moe, larry] = await Promise.all(
     credentials.map((credential) => User.create(credential))
   );
+
+  const Note = conn.define("note", {
+    text: STRING,
+  });
+  const notes = [
+    { text: "hello world" },
+    { text: "reminder to buy groceries" },
+    { text: "reminder to do laundry" },
+  ];
+  const [note1, note2, note3] = await Promise.all(
+    notes.map((note) => Note.create(note))
+  );
+  await lucy.setNotes(note1);
+  await moe.setNotes([note2, note3]);
+
+  User.HasMany(Note);
+  Note.BelongsTo(User);
+
   return {
     users: {
       lucy,
@@ -97,4 +118,4 @@ module.exports = {
   models: {
     User,
   },
-}
+};
