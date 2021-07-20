@@ -3,6 +3,7 @@ const { STRING } = Sequelize;
 const config = {
   logging: false,
 };
+const jwt = require("jsonwebtoken");
 
 if (process.env.LOGGING) {
   delete config.logging;
@@ -17,10 +18,14 @@ const User = conn.define("user", {
   password: STRING,
 });
 
+// token we will send to the browser
 User.byToken = async (token) => {
-  try {
-    const user = await User.findByPk(token);
-    if (user) {
+  try { // Verify function checks if the given token is valid - seeing if it matches the user's token
+    const response = jwt.verify(token, process.env.JWT);
+    // response = { userId: ... }
+    const user = await User.findByPk(response.userId);
+    if(user){
+      // if the tokens match, send back user info
       return user;
     }
     const error = Error("bad credentials");
@@ -33,6 +38,8 @@ User.byToken = async (token) => {
   }
 };
 
+// getting user form db,
+// if there is a user, send the token
 User.authenticate = async ({ username, password }) => {
   const user = await User.findOne({
     where: {
@@ -40,8 +47,13 @@ User.authenticate = async ({ username, password }) => {
       password,
     },
   });
-  if (user) {
-    return user.id;
+  if (user) { // sign takes the data and secret, and returns a token
+    // sign accepts data(payload), and a secret as arguments
+    // the data in this case, if the user's id
+    // process.env.JWT is our secret
+    const token = await jwt.sign({userId: user.id}, process.env.JWT)
+    // returning a token assigned to the user, info protection
+    return token;
   }
 
   const error = Error("bad credentials");
